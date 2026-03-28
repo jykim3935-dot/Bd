@@ -74,6 +74,11 @@ export default function SettingsPage() {
             color="text-emerald-400"
           />
           <SourceItem
+            label="진흥기관"
+            description="NIPA, NIA, IITP, KISA, KDATA, NRF, KOCCA, ETRI, KIAT, KEIT, KISTI, KITECH"
+            color="text-amber-400"
+          />
+          <SourceItem
             label="병원 공고"
             description="주요 대학병원 AI 관련 공고 및 과제"
             color="text-violet-400"

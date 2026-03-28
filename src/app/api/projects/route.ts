@@ -87,6 +87,7 @@ async function getAllProjects(): Promise<Project[]> {
     fetchG2BProjects(aiKeywords),
     fetchNTISProjects(aiKeywords),
     fetchHospitalProjects(aiKeywords),
+    fetchAgencyProjects(aiKeywords),
   ]);
 
   const projects: Project[] = [];
@@ -436,6 +437,218 @@ async function fetchKHIDI(keywords: string[]): Promise<Project[]> {
   } catch (e) {
     console.error('KHIDI error:', e);
   }
+  return projects;
+}
+
+// ==========================================
+// 진흥기관 (NIPA, NIA, IITP, KISA 등)
+// ==========================================
+async function fetchAgencyProjects(keywords: string[]): Promise<Project[]> {
+  const projects: Project[] = [];
+
+  const agencies = [
+    // NIPA (정보통신산업진흥원)
+    {
+      name: 'NIPA(정보통신산업진흥원)',
+      urls: [
+        'https://www.nipa.kr/main/selectBbsList.do?bbsId=BBS_0000006',
+        'https://www.nipa.kr/main/selectBbsList.do?bbsId=BBS_0000005',
+      ],
+      detailBase: 'https://www.nipa.kr',
+      category: 'ICT사업공고',
+    },
+    // NIA (한국지능정보사회진흥원)
+    {
+      name: 'NIA(한국지능정보사회진흥원)',
+      urls: [
+        'https://www.nia.or.kr/site/nia_kor/ex/bbs/List.do?cbIdx=82615',
+      ],
+      detailBase: 'https://www.nia.or.kr',
+      category: 'AI사업공고',
+    },
+    // IITP (정보통신기획평가원)
+    {
+      name: 'IITP(정보통신기획평가원)',
+      urls: [
+        'https://www.iitp.kr/kr/1/business/businessNotice/list.it',
+      ],
+      detailBase: 'https://www.iitp.kr',
+      category: 'R&D사업공고',
+    },
+    // KISA (한국인터넷진흥원)
+    {
+      name: 'KISA(한국인터넷진흥원)',
+      urls: [
+        'https://www.kisa.or.kr/401',
+      ],
+      detailBase: 'https://www.kisa.or.kr',
+      category: '보안·AI사업공고',
+    },
+    // KDATA (한국데이터산업진흥원)
+    {
+      name: 'KDATA(한국데이터산업진흥원)',
+      urls: [
+        'https://www.kdata.or.kr/board/list.do?boardId=notice',
+      ],
+      detailBase: 'https://www.kdata.or.kr',
+      category: '데이터사업공고',
+    },
+    // NRF (한국연구재단)
+    {
+      name: 'NRF(한국연구재단)',
+      urls: [
+        'https://www.nrf.re.kr/biz/list?menu_no=378',
+      ],
+      detailBase: 'https://www.nrf.re.kr',
+      category: '연구사업공고',
+    },
+    // KOCCA (한국콘텐츠진흥원)
+    {
+      name: 'KOCCA(한국콘텐츠진흥원)',
+      urls: [
+        'https://www.kocca.kr/kocca/bbs/list/B0000147/1835258_1977.do',
+      ],
+      detailBase: 'https://www.kocca.kr',
+      category: '콘텐츠사업공고',
+    },
+    // ETRI (한국전자통신연구원)
+    {
+      name: 'ETRI(한국전자통신연구원)',
+      urls: [
+        'https://www.etri.re.kr/kor/sub6/sub6_0401.etri',
+      ],
+      detailBase: 'https://www.etri.re.kr',
+      category: 'ICT R&D공고',
+    },
+    // KIAT (한국산업기술진흥원)
+    {
+      name: 'KIAT(한국산업기술진흥원)',
+      urls: [
+        'https://www.kiat.or.kr/front/board/boardList.do?board_id=BOARD_00063',
+      ],
+      detailBase: 'https://www.kiat.or.kr',
+      category: '산업기술사업공고',
+    },
+    // KEIT (한국산업기술평가관리원)
+    {
+      name: 'KEIT(한국산업기술평가관리원)',
+      urls: [
+        'https://www.keit.re.kr/board/list.do?boardId=NOTICE',
+      ],
+      detailBase: 'https://www.keit.re.kr',
+      category: '산업기술평가공고',
+    },
+    // KISTI (한국과학기술정보연구원)
+    {
+      name: 'KISTI(한국과학기술정보연구원)',
+      urls: [
+        'https://www.kisti.re.kr/post/news-notice',
+      ],
+      detailBase: 'https://www.kisti.re.kr',
+      category: '과학기술정보공고',
+    },
+    // KITECH (한국생산기술연구원)
+    {
+      name: 'KITECH(한국생산기술연구원)',
+      urls: [
+        'https://www.kitech.re.kr/main/board/list.do?boardId=BBS_0000015',
+      ],
+      detailBase: 'https://www.kitech.re.kr',
+      category: '생산기술공고',
+    },
+  ];
+
+  const agencyResults = await Promise.allSettled(
+    agencies.map((agency) => fetchSingleAgency(agency))
+  );
+
+  for (const result of agencyResults) {
+    if (result.status === 'fulfilled') {
+      projects.push(...result.value);
+    }
+  }
+
+  return deduplicateProjects(projects);
+}
+
+async function fetchSingleAgency(agency: {
+  name: string;
+  urls: string[];
+  detailBase: string;
+  category: string;
+}): Promise<Project[]> {
+  const projects: Project[] = [];
+
+  for (const url of agency.urls) {
+    try {
+      const res = await fetchWithTimeout(url, 10000);
+      if (!res.ok) continue;
+
+      const html = await res.text();
+      const $ = cheerio.load(html);
+
+      // 다양한 게시판 구조에 대응하는 셀렉터
+      const selectors = [
+        'table tbody tr',
+        '.board-list li',
+        '.bbs-list li',
+        '.notice-list li',
+        'ul.list-body li',
+        '.list-wrap li',
+        '.tbl_list tbody tr',
+        '.board_list tbody tr',
+        'div.list-item',
+        '.post-list li',
+        '.data-list li',
+      ];
+
+      const combinedSelector = selectors.join(', ');
+
+      $(combinedSelector).each((i, el) => {
+        const titleEl = $(el).find(
+          'a, .title, .subject, .ttl, td.subject a, td:nth-child(2) a, .board-title'
+        ).first();
+        const title = titleEl.text().trim().replace(/\s+/g, ' ');
+
+        if (!title || title.length < 5) return;
+        if (!isAIRelated(title)) return;
+
+        const href = titleEl.attr('href') || '';
+        const dateEl = $(el).find(
+          '.date, .day, .regist-day, td:last-child, td.date, .write-date, time'
+        ).first();
+        const date = dateEl.text().trim();
+
+        // 예산 정보 추출 시도
+        const fullText = $(el).text();
+        const budgetMatch = fullText.match(
+          /(\d{1,3}[,.]?\d{0,3})\s*(억|백만|만)\s*원/
+        );
+        const budget = budgetMatch ? `${budgetMatch[1]}${budgetMatch[2]}원` : '미공개';
+
+        projects.push({
+          id: `agency-${agency.name}-${i}`,
+          source: 'agency',
+          title: title.substring(0, 200),
+          organization: agency.name,
+          budget,
+          deadline: date || '미정',
+          postedDate: extractDate(date) || new Date().toISOString().split('T')[0],
+          category: agency.category,
+          description: `[${agency.name}] ${title}`,
+          url: href.startsWith('http')
+            ? href
+            : href.startsWith('/')
+              ? `${agency.detailBase}${href}`
+              : `${agency.detailBase}/${href}`,
+          keywords: extractKeywords(title),
+        });
+      });
+    } catch (e) {
+      console.error(`Agency fetch error (${agency.name}):`, e);
+    }
+  }
+
   return projects;
 }
 
