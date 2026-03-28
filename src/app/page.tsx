@@ -54,7 +54,7 @@ export default function Dashboard() {
         <div>
           <h1 className="text-xl font-bold text-white">AI 과제 모니터</h1>
           <p className="text-xs text-slate-400 mt-0.5">
-            나라장터 · NTIS · 병원 AI 과제 통합 모니터링
+            나라장터 · NTIS · NIPA · NIA · KISA 등 AI 과제 통합
           </p>
         </div>
         <button
