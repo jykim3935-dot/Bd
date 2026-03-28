@@ -80,7 +80,7 @@ export default function Dashboard() {
 
       {/* 통계 */}
       {!loading && !error && (
-        <div className="grid grid-cols-3 gap-2 mb-4">
+        <div className="grid grid-cols-4 gap-2 mb-4">
           <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-2 text-center">
             <p className="text-lg font-bold text-blue-400">
               {projects.filter((p) => p.source === 'g2b').length}
@@ -92,6 +92,12 @@ export default function Dashboard() {
               {projects.filter((p) => p.source === 'ntis').length}
             </p>
             <p className="text-[10px] text-slate-400">NTIS</p>
+          </div>
+          <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-2 text-center">
+            <p className="text-lg font-bold text-amber-400">
+              {projects.filter((p) => p.source === 'agency').length}
+            </p>
+            <p className="text-[10px] text-slate-400">진흥기관</p>
           </div>
           <div className="bg-violet-500/10 border border-violet-500/20 rounded-lg p-2 text-center">
             <p className="text-lg font-bold text-violet-400">

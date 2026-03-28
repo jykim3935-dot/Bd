@@ -1,4 +1,4 @@
-export type ProjectSource = 'g2b' | 'ntis' | 'hospital';
+export type ProjectSource = 'g2b' | 'ntis' | 'hospital' | 'agency';
 
 export interface Project {
   id: string;
@@ -40,6 +40,12 @@ export const SOURCE_CONFIG: Record<ProjectSource, SourceConfig> = {
     color: 'text-violet-400',
     bgColor: 'bg-violet-500/20',
   },
+  agency: {
+    key: 'agency',
+    label: '진흥기관',
+    color: 'text-amber-400',
+    bgColor: 'bg-amber-500/20',
+  },
 };
 
 // 기관 프리셋 - 자동 검색용 키워드
@@ -66,6 +72,15 @@ export const SEARCH_PRESETS = {
       '세브란스병원', '고려대학교병원', '서울성모병원',
       '분당서울대학교병원', '국립암센터', '국립중앙의료원',
       '한림대학교성심병원', '가천대길병원',
+    ],
+    agency: [
+      'NIPA(정보통신산업진흥원)', 'NIA(한국지능정보사회진흥원)',
+      'IITP(정보통신기획평가원)', 'KISA(한국인터넷진흥원)',
+      'KDATA(한국데이터산업진흥원)', 'NRF(한국연구재단)',
+      'KOCCA(한국콘텐츠진흥원)', 'ETRI(한국전자통신연구원)',
+      'KIAT(한국산업기술진흥원)', 'KEIT(한국산업기술평가관리원)',
+      'KOITA(한국산업기술진흥협회)', 'KISTI(한국과학기술정보연구원)',
+      'KITECH(한국생산기술연구원)',
     ],
   },
 };
