@@ -447,144 +447,131 @@ async function fetchKHIDI(keywords: string[]): Promise<Project[]> {
 
 // ==========================================
 // 진흥기관 (NIPA, NIA, IITP, KISA 등)
+// - 개별 사이트 전용 스크래퍼 + IRIS 통합공고 활용
 // ==========================================
 async function fetchAgencyProjects(keywords: string[]): Promise<Project[]> {
+  const results = await Promise.allSettled([
+    fetchIRIS(keywords),        // 범부처 R&D 통합공고 (IITP, NRF, KIAT, KEIT 등)
+    fetchNIPA(),                // NIPA 전용
+    fetchNIA(),                 // NIA 전용
+    fetchKISA(),                // KISA 전용
+    fetchKOCCA(),               // KOCCA 전용
+    fetchETRI(),                // ETRI 전용
+    fetchKDATA(),               // KDATA 전용
+    fetchEnaraDoum(keywords),   // e나라도움 (정부 보조금 통합)
+  ]);
+
   const projects: Project[] = [];
-
-  const agencies = [
-    // NIPA (정보통신산업진흥원)
-    {
-      name: 'NIPA(정보통신산업진흥원)',
-      urls: [
-        'https://www.nipa.kr/main/selectBbsList.do?bbsId=BBS_0000006',
-        'https://www.nipa.kr/main/selectBbsList.do?bbsId=BBS_0000005',
-      ],
-      detailBase: 'https://www.nipa.kr',
-      category: 'ICT사업공고',
-    },
-    // NIA (한국지능정보사회진흥원)
-    {
-      name: 'NIA(한국지능정보사회진흥원)',
-      urls: [
-        'https://www.nia.or.kr/site/nia_kor/ex/bbs/List.do?cbIdx=82615',
-      ],
-      detailBase: 'https://www.nia.or.kr',
-      category: 'AI사업공고',
-    },
-    // IITP (정보통신기획평가원)
-    {
-      name: 'IITP(정보통신기획평가원)',
-      urls: [
-        'https://www.iitp.kr/kr/1/business/businessNotice/list.it',
-      ],
-      detailBase: 'https://www.iitp.kr',
-      category: 'R&D사업공고',
-    },
-    // KISA (한국인터넷진흥원)
-    {
-      name: 'KISA(한국인터넷진흥원)',
-      urls: [
-        'https://www.kisa.or.kr/401',
-      ],
-      detailBase: 'https://www.kisa.or.kr',
-      category: '보안·AI사업공고',
-    },
-    // KDATA (한국데이터산업진흥원)
-    {
-      name: 'KDATA(한국데이터산업진흥원)',
-      urls: [
-        'https://www.kdata.or.kr/board/list.do?boardId=notice',
-      ],
-      detailBase: 'https://www.kdata.or.kr',
-      category: '데이터사업공고',
-    },
-    // NRF (한국연구재단)
-    {
-      name: 'NRF(한국연구재단)',
-      urls: [
-        'https://www.nrf.re.kr/biz/list?menu_no=378',
-      ],
-      detailBase: 'https://www.nrf.re.kr',
-      category: '연구사업공고',
-    },
-    // KOCCA (한국콘텐츠진흥원)
-    {
-      name: 'KOCCA(한국콘텐츠진흥원)',
-      urls: [
-        'https://www.kocca.kr/kocca/bbs/list/B0000147/1835258_1977.do',
-      ],
-      detailBase: 'https://www.kocca.kr',
-      category: '콘텐츠사업공고',
-    },
-    // ETRI (한국전자통신연구원)
-    {
-      name: 'ETRI(한국전자통신연구원)',
-      urls: [
-        'https://www.etri.re.kr/kor/sub6/sub6_0401.etri',
-      ],
-      detailBase: 'https://www.etri.re.kr',
-      category: 'ICT R&D공고',
-    },
-    // KIAT (한국산업기술진흥원)
-    {
-      name: 'KIAT(한국산업기술진흥원)',
-      urls: [
-        'https://www.kiat.or.kr/front/board/boardList.do?board_id=BOARD_00063',
-      ],
-      detailBase: 'https://www.kiat.or.kr',
-      category: '산업기술사업공고',
-    },
-    // KEIT (한국산업기술평가관리원)
-    {
-      name: 'KEIT(한국산업기술평가관리원)',
-      urls: [
-        'https://www.keit.re.kr/board/list.do?boardId=NOTICE',
-      ],
-      detailBase: 'https://www.keit.re.kr',
-      category: '산업기술평가공고',
-    },
-    // KISTI (한국과학기술정보연구원)
-    {
-      name: 'KISTI(한국과학기술정보연구원)',
-      urls: [
-        'https://www.kisti.re.kr/post/news-notice',
-      ],
-      detailBase: 'https://www.kisti.re.kr',
-      category: '과학기술정보공고',
-    },
-    // KITECH (한국생산기술연구원)
-    {
-      name: 'KITECH(한국생산기술연구원)',
-      urls: [
-        'https://www.kitech.re.kr/main/board/list.do?boardId=BBS_0000015',
-      ],
-      detailBase: 'https://www.kitech.re.kr',
-      category: '생산기술공고',
-    },
-  ];
-
-  const agencyResults = await Promise.allSettled(
-    agencies.map((agency) => fetchSingleAgency(agency))
-  );
-
-  for (const result of agencyResults) {
+  for (const result of results) {
     if (result.status === 'fulfilled') {
       projects.push(...result.value);
+    } else {
+      console.error('Agency source failed:', result.reason);
     }
   }
 
   return deduplicateProjects(projects);
 }
 
-async function fetchSingleAgency(agency: {
-  name: string;
-  urls: string[];
-  detailBase: string;
-  category: string;
-}): Promise<Project[]> {
+// IRIS - 범부처 R&D 통합공고 (IITP, NRF, KIAT, KEIT, KISTEP 등 모두 여기에 공고)
+async function fetchIRIS(keywords: string[]): Promise<Project[]> {
   const projects: Project[] = [];
+  try {
+    // IRIS 사업공고 목록 페이지
+    const url = 'https://www.iris.go.kr/contents/retrieveBsnsAnnounceDtlList.do';
+    const res = await fetchWithTimeout(url, 12000);
+    if (!res.ok) return projects;
 
-  for (const url of agency.urls) {
+    const html = await res.text();
+    const $ = cheerio.load(html);
+
+    $('table tbody tr, .annouce-list tr, .tbl_type01 tbody tr').each((i, el) => {
+      const tds = $(el).find('td');
+      if (tds.length < 3) return;
+
+      const titleEl = $(el).find('a').first();
+      const title = titleEl.text().trim().replace(/\s+/g, ' ');
+      if (!title || title.length < 5) return;
+
+      const org = tds.length > 1 ? $(tds[1]).text().trim() : '';
+      const date = tds.length > 3 ? $(tds[3]).text().trim() : $(tds[tds.length - 1]).text().trim();
+      const href = titleEl.attr('href') || '';
+
+      // IRIS에는 모든 R&D 공고가 있으므로 AI 필터 적용
+      if (!isAIRelated(title + ' ' + org)) return;
+
+      projects.push({
+        id: `iris-${i}`,
+        source: 'agency',
+        title: title.substring(0, 200),
+        organization: org || 'IRIS(범부처 R&D)',
+        budget: '미공개',
+        deadline: date || '미정',
+        postedDate: extractDate(date) || new Date().toISOString().split('T')[0],
+        category: 'R&D사업공고',
+        description: `[IRIS 범부처 R&D] ${title}`,
+        url: href.startsWith('http') ? href : `https://www.iris.go.kr${href}`,
+        keywords: extractKeywords(title),
+      });
+    });
+  } catch (e) {
+    console.error('IRIS fetch error:', e);
+  }
+  return projects;
+}
+
+// e나라도움 - 정부 보조금/사업 통합공고
+async function fetchEnaraDoum(keywords: string[]): Promise<Project[]> {
+  const projects: Project[] = [];
+  for (const keyword of keywords.slice(0, 2)) {
+    try {
+      const url = `https://www.gosims.go.kr/hg/hg001/retrieveNoticeList.do?searchNm=${encodeURIComponent(keyword)}`;
+      const res = await fetchWithTimeout(url, 10000);
+      if (!res.ok) continue;
+
+      const html = await res.text();
+      const $ = cheerio.load(html);
+
+      $('table tbody tr, .board_list tbody tr, .tbl_list tbody tr').each((i, el) => {
+        const titleEl = $(el).find('a').first();
+        const title = titleEl.text().trim().replace(/\s+/g, ' ');
+        if (!title || title.length < 5 || !isAIRelated(title)) return;
+
+        const tds = $(el).find('td');
+        const org = tds.length > 2 ? $(tds[2]).text().trim() : '';
+        const date = tds.length > 4 ? $(tds[4]).text().trim() : '';
+        const href = titleEl.attr('href') || '';
+
+        projects.push({
+          id: `enara-${i}-${keyword}`,
+          source: 'agency',
+          title: title.substring(0, 200),
+          organization: org || 'e나라도움',
+          budget: '미공개',
+          deadline: date || '미정',
+          postedDate: extractDate(date) || new Date().toISOString().split('T')[0],
+          category: '정부보조금공고',
+          description: `[e나라도움] ${title}`,
+          url: href.startsWith('http') ? href : `https://www.gosims.go.kr${href}`,
+          keywords: extractKeywords(title),
+        });
+      });
+    } catch (e) {
+      console.error('e나라도움 error:', e);
+    }
+  }
+  return projects;
+}
+
+// NIPA 전용 - 사업공고 게시판 (서버 렌더링)
+async function fetchNIPA(): Promise<Project[]> {
+  const projects: Project[] = [];
+  const urls = [
+    'https://www.nipa.kr/main/selectBbsList.do?bbsId=BBS_0000006',
+    'https://www.nipa.kr/main/selectBbsList.do?bbsId=BBS_0000005',
+  ];
+
+  for (const url of urls) {
     try {
       const res = await fetchWithTimeout(url, 10000);
       if (!res.ok) continue;
@@ -592,68 +579,257 @@ async function fetchSingleAgency(agency: {
       const html = await res.text();
       const $ = cheerio.load(html);
 
-      // 다양한 게시판 구조에 대응하는 셀렉터
-      const selectors = [
-        'table tbody tr',
-        '.board-list li',
-        '.bbs-list li',
-        '.notice-list li',
-        'ul.list-body li',
-        '.list-wrap li',
-        '.tbl_list tbody tr',
-        '.board_list tbody tr',
-        'div.list-item',
-        '.post-list li',
-        '.data-list li',
-      ];
-
-      const combinedSelector = selectors.join(', ');
-
-      $(combinedSelector).each((i, el) => {
-        const titleEl = $(el).find(
-          'a, .title, .subject, .ttl, td.subject a, td:nth-child(2) a, .board-title'
-        ).first();
-        const title = titleEl.text().trim().replace(/\s+/g, ' ');
-
+      // NIPA 게시판 구조: table > tbody > tr 또는 div.board_list
+      $('table tbody tr, .board_list li, .bbs_list li, .list_item').each((i, el) => {
+        const titleEl = $(el).find('a').first();
+        let title = titleEl.text().trim().replace(/\s+/g, ' ');
+        // td 내 a 태그가 없으면 td:nth-child(2) 시도
+        if (!title) {
+          title = $(el).find('td:nth-child(2), td.subject, td.title').first().text().trim().replace(/\s+/g, ' ');
+        }
         if (!title || title.length < 5) return;
-        if (!isAIRelated(title)) return;
+
+        // NIPA는 ICT 전문 기관이므로 AI 필터 완화 적용
+        if (!isAIRelatedLoose(title)) return;
 
         const href = titleEl.attr('href') || '';
-        const dateEl = $(el).find(
-          '.date, .day, .regist-day, td:last-child, td.date, .write-date, time'
-        ).first();
-        const date = dateEl.text().trim();
-
-        // 예산 정보 추출 시도
-        const fullText = $(el).text();
-        const budgetMatch = fullText.match(
-          /(\d{1,3}[,.]?\d{0,3})\s*(억|백만|만)\s*원/
-        );
-        const budget = budgetMatch ? `${budgetMatch[1]}${budgetMatch[2]}원` : '미공개';
+        const tds = $(el).find('td');
+        const date = $(el).find('td:last-child, .date').first().text().trim();
 
         projects.push({
-          id: `agency-${agency.name}-${i}`,
+          id: `nipa-${i}-${url.slice(-1)}`,
           source: 'agency',
           title: title.substring(0, 200),
-          organization: agency.name,
-          budget,
+          organization: 'NIPA(정보통신산업진흥원)',
+          budget: '미공개',
           deadline: date || '미정',
           postedDate: extractDate(date) || new Date().toISOString().split('T')[0],
-          category: agency.category,
-          description: `[${agency.name}] ${title}`,
-          url: href.startsWith('http')
-            ? href
-            : href.startsWith('/')
-              ? `${agency.detailBase}${href}`
-              : `${agency.detailBase}/${href}`,
+          category: 'ICT사업공고',
+          description: `[NIPA] ${title}`,
+          url: href.startsWith('http') ? href : `https://www.nipa.kr${href}`,
           keywords: extractKeywords(title),
         });
       });
     } catch (e) {
-      console.error(`Agency fetch error (${agency.name}):`, e);
+      console.error('NIPA error:', e);
     }
   }
+  return projects;
+}
 
+// NIA 전용 (한국지능정보사회진흥원) - 공지/사업공고
+async function fetchNIA(): Promise<Project[]> {
+  const projects: Project[] = [];
+  try {
+    const url = 'https://www.nia.or.kr/site/nia_kor/ex/bbs/List.do?cbIdx=82615';
+    const res = await fetchWithTimeout(url, 10000);
+    if (!res.ok) return projects;
+
+    const html = await res.text();
+    const $ = cheerio.load(html);
+
+    // NIA CMS 게시판 구조
+    $('table tbody tr, .board-list-wrap tr, ul.bbs_list li').each((i, el) => {
+      const titleEl = $(el).find('a, .bbs_tit a, td.title a, td:nth-child(2) a').first();
+      const title = titleEl.text().trim().replace(/\s+/g, ' ');
+      if (!title || title.length < 5) return;
+
+      // NIA는 AI 전문 기관 → 완화 필터
+      if (!isAIRelatedLoose(title)) return;
+
+      const href = titleEl.attr('href') || '';
+      const date = $(el).find('.date, td:last-child, .reg_date').first().text().trim();
+
+      projects.push({
+        id: `nia-${i}`,
+        source: 'agency',
+        title: title.substring(0, 200),
+        organization: 'NIA(한국지능정보사회진흥원)',
+        budget: '미공개',
+        deadline: date || '미정',
+        postedDate: extractDate(date) || new Date().toISOString().split('T')[0],
+        category: 'AI사업공고',
+        description: `[NIA] ${title}`,
+        url: href.startsWith('http') ? href : `https://www.nia.or.kr${href}`,
+        keywords: extractKeywords(title),
+      });
+    });
+  } catch (e) {
+    console.error('NIA error:', e);
+  }
+  return projects;
+}
+
+// KISA 전용 (한국인터넷진흥원)
+async function fetchKISA(): Promise<Project[]> {
+  const projects: Project[] = [];
+  try {
+    // KISA 공지사항/사업공고
+    const urls = [
+      'https://www.kisa.or.kr/401',
+      'https://www.kisa.or.kr/1011',
+    ];
+    for (const url of urls) {
+      const res = await fetchWithTimeout(url, 10000);
+      if (!res.ok) continue;
+
+      const html = await res.text();
+      const $ = cheerio.load(html);
+
+      $('table tbody tr, .board-list tr, ul.board_list li, .list-wrap li').each((i, el) => {
+        const titleEl = $(el).find('a').first();
+        const title = titleEl.text().trim().replace(/\s+/g, ' ');
+        if (!title || title.length < 5) return;
+        if (!isAIRelatedLoose(title)) return;
+
+        const href = titleEl.attr('href') || '';
+        const date = $(el).find('.date, td:last-child, .day').first().text().trim();
+
+        projects.push({
+          id: `kisa-${i}-${url.slice(-3)}`,
+          source: 'agency',
+          title: title.substring(0, 200),
+          organization: 'KISA(한국인터넷진흥원)',
+          budget: '미공개',
+          deadline: date || '미정',
+          postedDate: extractDate(date) || new Date().toISOString().split('T')[0],
+          category: '보안·AI사업공고',
+          description: `[KISA] ${title}`,
+          url: href.startsWith('http') ? href : `https://www.kisa.or.kr${href}`,
+          keywords: extractKeywords(title),
+        });
+      });
+    }
+  } catch (e) {
+    console.error('KISA error:', e);
+  }
+  return projects;
+}
+
+// KOCCA 전용 (한국콘텐츠진흥원)
+async function fetchKOCCA(): Promise<Project[]> {
+  const projects: Project[] = [];
+  try {
+    const url = 'https://www.kocca.kr/kocca/bbs/list/B0000147/1835258_1977.do';
+    const res = await fetchWithTimeout(url, 10000);
+    if (!res.ok) return projects;
+
+    const html = await res.text();
+    const $ = cheerio.load(html);
+
+    $('table tbody tr, .board_list tbody tr, ul.brd_list li').each((i, el) => {
+      const titleEl = $(el).find('a').first();
+      const title = titleEl.text().trim().replace(/\s+/g, ' ');
+      if (!title || title.length < 5) return;
+      if (!isAIRelated(title)) return;
+
+      const href = titleEl.attr('href') || '';
+      const date = $(el).find('.date, td:last-child').first().text().trim();
+
+      projects.push({
+        id: `kocca-${i}`,
+        source: 'agency',
+        title: title.substring(0, 200),
+        organization: 'KOCCA(한국콘텐츠진흥원)',
+        budget: '미공개',
+        deadline: date || '미정',
+        postedDate: extractDate(date) || new Date().toISOString().split('T')[0],
+        category: '콘텐츠사업공고',
+        description: `[KOCCA] ${title}`,
+        url: href.startsWith('http') ? href : `https://www.kocca.kr${href}`,
+        keywords: extractKeywords(title),
+      });
+    });
+  } catch (e) {
+    console.error('KOCCA error:', e);
+  }
+  return projects;
+}
+
+// ETRI 전용 (한국전자통신연구원)
+async function fetchETRI(): Promise<Project[]> {
+  const projects: Project[] = [];
+  try {
+    const url = 'https://www.etri.re.kr/kor/sub6/sub6_0401.etri';
+    const res = await fetchWithTimeout(url, 10000);
+    if (!res.ok) return projects;
+
+    const html = await res.text();
+    const $ = cheerio.load(html);
+
+    $('table tbody tr, .board_list tbody tr, .bbs_list li').each((i, el) => {
+      const titleEl = $(el).find('a').first();
+      const title = titleEl.text().trim().replace(/\s+/g, ' ');
+      if (!title || title.length < 5) return;
+      // ETRI는 ICT R&D 전문 → 완화 필터
+      if (!isAIRelatedLoose(title)) return;
+
+      const href = titleEl.attr('href') || '';
+      const date = $(el).find('.date, td:last-child').first().text().trim();
+
+      projects.push({
+        id: `etri-${i}`,
+        source: 'agency',
+        title: title.substring(0, 200),
+        organization: 'ETRI(한국전자통신연구원)',
+        budget: '미공개',
+        deadline: date || '미정',
+        postedDate: extractDate(date) || new Date().toISOString().split('T')[0],
+        category: 'ICT R&D공고',
+        description: `[ETRI] ${title}`,
+        url: href.startsWith('http') ? href : `https://www.etri.re.kr${href}`,
+        keywords: extractKeywords(title),
+      });
+    });
+  } catch (e) {
+    console.error('ETRI error:', e);
+  }
+  return projects;
+}
+
+// KDATA 전용 (한국데이터산업진흥원)
+async function fetchKDATA(): Promise<Project[]> {
+  const projects: Project[] = [];
+  try {
+    const urls = [
+      'https://www.kdata.or.kr/kr/board/notice_01/boardList.do',
+      'https://www.kdata.or.kr/kr/board/business_01/boardList.do',
+    ];
+    for (const url of urls) {
+      const res = await fetchWithTimeout(url, 10000);
+      if (!res.ok) continue;
+
+      const html = await res.text();
+      const $ = cheerio.load(html);
+
+      $('table tbody tr, .board_list tbody tr, .bbs_list li').each((i, el) => {
+        const titleEl = $(el).find('a').first();
+        const title = titleEl.text().trim().replace(/\s+/g, ' ');
+        if (!title || title.length < 5) return;
+        // KDATA는 데이터 전문 → 완화 필터
+        if (!isAIRelatedLoose(title)) return;
+
+        const href = titleEl.attr('href') || '';
+        const date = $(el).find('.date, td:last-child').first().text().trim();
+
+        projects.push({
+          id: `kdata-${i}-${url.includes('notice') ? 'n' : 'b'}`,
+          source: 'agency',
+          title: title.substring(0, 200),
+          organization: 'KDATA(한국데이터산업진흥원)',
+          budget: '미공개',
+          deadline: date || '미정',
+          postedDate: extractDate(date) || new Date().toISOString().split('T')[0],
+          category: '데이터사업공고',
+          description: `[KDATA] ${title}`,
+          url: href.startsWith('http') ? href : `https://www.kdata.or.kr${href}`,
+          keywords: extractKeywords(title),
+        });
+      });
+    }
+  } catch (e) {
+    console.error('KDATA error:', e);
+  }
   return projects;
 }
 
@@ -926,6 +1102,20 @@ function isAIRelated(text: string): boolean {
   ];
   const lower = text.toLowerCase();
   return aiTerms.some((term) => lower.includes(term.toLowerCase()));
+}
+
+// AI/ICT 전문기관용 완화 필터 (사업공고, 과제, 연구 키워드도 포함)
+function isAIRelatedLoose(text: string): boolean {
+  if (isAIRelated(text)) return true;
+  const looseTerms = [
+    '사업공고', '과제공고', '모집공고', '참여기업', '지원사업',
+    '연구개발', 'R&D', 'SW', '소프트웨어', '정보화', '정보시스템',
+    '플랫폼', '솔루션', '바우처', '실증', '고도화', '구축사업',
+    '디지털', '데이터', '보안', '네트워크', '블록체인', '핀테크',
+    'XR', 'VR', 'AR', '반도체', '양자', '사이버',
+  ];
+  const lower = text.toLowerCase();
+  return looseTerms.some((term) => lower.includes(term.toLowerCase()));
 }
 
 function extractKeywords(text: string): string[] {
