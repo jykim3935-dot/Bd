@@ -83,12 +83,32 @@ async function getAllProjects(): Promise<Project[]> {
 
   const aiKeywords = SEARCH_PRESETS.keywords.slice(0, 5); // 주요 키워드만
 
-  const results = await Promise.allSettled([
+  // 빠른 네트워크 감지: 2초 내 접근 가능 여부 확인
+  const canReachNetwork = await Promise.race([
+    fetch('https://www.google.com', { method: 'HEAD', signal: AbortSignal.timeout(2000) })
+      .then(() => true).catch(() => false),
+    new Promise<boolean>((r) => setTimeout(() => r(false), 2000)),
+  ]);
+
+  if (!canReachNetwork) {
+    console.log('Network unavailable — using fallback demo data');
+    const fallback = getFallbackDemoData();
+    cache = { data: fallback, timestamp: Date.now() };
+    return fallback;
+  }
+
+  // 네트워크 가능 시에만 스크래핑 (글로벌 타임아웃 10초)
+  const GLOBAL_TIMEOUT = 10000;
+  const collectAll = Promise.allSettled([
     fetchG2BProjects(aiKeywords),
     fetchNTISProjects(aiKeywords),
     fetchHospitalProjects(aiKeywords),
     fetchAgencyProjects(aiKeywords),
   ]);
+  const timeoutPromise = new Promise<PromiseSettledResult<Project[]>[]>((resolve) =>
+    setTimeout(() => resolve([]), GLOBAL_TIMEOUT)
+  );
+  const results = await Promise.race([collectAll, timeoutPromise]);
 
   const projects: Project[] = [];
   for (const result of results) {
@@ -101,7 +121,9 @@ async function getAllProjects(): Promise<Project[]> {
 
   // 스크래핑 결과가 없으면 데모 데이터로 폴백 (네트워크 차단 환경 대응)
   if (projects.length === 0) {
-    return getFallbackDemoData();
+    const fallback = getFallbackDemoData();
+    cache = { data: fallback, timestamp: Date.now() };
+    return fallback;
   }
 
   cache = { data: projects, timestamp: Date.now() };
@@ -118,7 +140,7 @@ async function fetchG2BProjects(keywords: string[]): Promise<Project[]> {
     try {
       const url = `https://www.g2b.go.kr:8101/ep/tbid/tbidList.do?taskClCds=&bidNm=${encodeURIComponent(keyword)}&searchDtType=1&fromBidDt=&toBidDt=&fromOpenBidDt=&toOpenBidDt=&radOrgan=1&dminsttCd=&orgNm=&area=&areaNm=&industry=&industryNm=&budgetCompare=&budgetFrom=&budgetTo=&maxPageViewNoBy498=1&recordCountPerPage=20`;
 
-      const res = await fetchWithTimeout(url, 10000);
+      const res = await fetchWithTimeout(url, 3000);
       if (!res.ok) continue;
 
       const html = await res.text();
@@ -175,7 +197,7 @@ async function fetchG2BRSS(keywords: string[]): Promise<Project[]> {
   for (const keyword of keywords.slice(0, 2)) {
     try {
       const url = `https://www.g2b.go.kr:8101/ep/tbid/tbidList.do?bidNm=${encodeURIComponent(keyword)}&recordCountPerPage=10&taskClCds=`;
-      const res = await fetchWithTimeout(url, 8000);
+      const res = await fetchWithTimeout(url, 3000);
       if (!res.ok) continue;
 
       const text = await res.text();
@@ -221,7 +243,7 @@ async function fetchNTISProjects(keywords: string[]): Promise<Project[]> {
     try {
       // NTIS 과제검색 페이지
       const url = `https://www.ntis.go.kr/rndgate/eg/un/ra/mng.do`;
-      const res = await fetchWithTimeout(url, 10000);
+      const res = await fetchWithTimeout(url, 3000);
       if (!res.ok) continue;
 
       const html = await res.text();
@@ -274,7 +296,7 @@ async function fetchNTISAPI(keywords: string[]): Promise<Project[]> {
   for (const keyword of keywords.slice(0, 2)) {
     try {
       const url = `https://www.ntis.go.kr/ThSearchSvc/selectTotalSearch.do?searchWord=${encodeURIComponent(keyword)}&searchField=ALL&pageSize=10`;
-      const res = await fetchWithTimeout(url, 8000);
+      const res = await fetchWithTimeout(url, 3000);
       if (!res.ok) continue;
 
       const text = await res.text();
@@ -359,7 +381,7 @@ async function fetchHospitalProjects(keywords: string[]): Promise<Project[]> {
 
   for (const hospital of hospitalSites) {
     try {
-      const res = await fetchWithTimeout(hospital.url, 8000);
+      const res = await fetchWithTimeout(hospital.url, 3000);
       if (!res.ok) continue;
 
       const html = await res.text();
@@ -412,7 +434,7 @@ async function fetchKHIDI(keywords: string[]): Promise<Project[]> {
   const projects: Project[] = [];
   try {
     const url = 'https://www.khidi.or.kr/board/list?menuId=MENU00085&siteId=SITE00002';
-    const res = await fetchWithTimeout(url, 8000);
+    const res = await fetchWithTimeout(url, 3000);
     if (!res.ok) return projects;
 
     const html = await res.text();
@@ -479,7 +501,7 @@ async function fetchIRIS(keywords: string[]): Promise<Project[]> {
   try {
     // IRIS 사업공고 목록 페이지
     const url = 'https://www.iris.go.kr/contents/retrieveBsnsAnnounceDtlList.do';
-    const res = await fetchWithTimeout(url, 12000);
+    const res = await fetchWithTimeout(url, 3000);
     if (!res.ok) return projects;
 
     const html = await res.text();
@@ -526,7 +548,7 @@ async function fetchEnaraDoum(keywords: string[]): Promise<Project[]> {
   for (const keyword of keywords.slice(0, 2)) {
     try {
       const url = `https://www.gosims.go.kr/hg/hg001/retrieveNoticeList.do?searchNm=${encodeURIComponent(keyword)}`;
-      const res = await fetchWithTimeout(url, 10000);
+      const res = await fetchWithTimeout(url, 3000);
       if (!res.ok) continue;
 
       const html = await res.text();
@@ -573,7 +595,7 @@ async function fetchNIPA(): Promise<Project[]> {
 
   for (const url of urls) {
     try {
-      const res = await fetchWithTimeout(url, 10000);
+      const res = await fetchWithTimeout(url, 3000);
       if (!res.ok) continue;
 
       const html = await res.text();
@@ -622,7 +644,7 @@ async function fetchNIA(): Promise<Project[]> {
   const projects: Project[] = [];
   try {
     const url = 'https://www.nia.or.kr/site/nia_kor/ex/bbs/List.do?cbIdx=82615';
-    const res = await fetchWithTimeout(url, 10000);
+    const res = await fetchWithTimeout(url, 3000);
     if (!res.ok) return projects;
 
     const html = await res.text();
@@ -670,7 +692,7 @@ async function fetchKISA(): Promise<Project[]> {
       'https://www.kisa.or.kr/1011',
     ];
     for (const url of urls) {
-      const res = await fetchWithTimeout(url, 10000);
+      const res = await fetchWithTimeout(url, 3000);
       if (!res.ok) continue;
 
       const html = await res.text();
@@ -711,7 +733,7 @@ async function fetchKOCCA(): Promise<Project[]> {
   const projects: Project[] = [];
   try {
     const url = 'https://www.kocca.kr/kocca/bbs/list/B0000147/1835258_1977.do';
-    const res = await fetchWithTimeout(url, 10000);
+    const res = await fetchWithTimeout(url, 3000);
     if (!res.ok) return projects;
 
     const html = await res.text();
@@ -751,7 +773,7 @@ async function fetchETRI(): Promise<Project[]> {
   const projects: Project[] = [];
   try {
     const url = 'https://www.etri.re.kr/kor/sub6/sub6_0401.etri';
-    const res = await fetchWithTimeout(url, 10000);
+    const res = await fetchWithTimeout(url, 3000);
     if (!res.ok) return projects;
 
     const html = await res.text();
@@ -796,7 +818,7 @@ async function fetchKDATA(): Promise<Project[]> {
       'https://www.kdata.or.kr/kr/board/business_01/boardList.do',
     ];
     for (const url of urls) {
-      const res = await fetchWithTimeout(url, 10000);
+      const res = await fetchWithTimeout(url, 3000);
       if (!res.ok) continue;
 
       const html = await res.text();
